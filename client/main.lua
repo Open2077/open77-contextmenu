@@ -1,6 +1,12 @@
 local config=ContextMenuConfig
 local resource=GetCurrentResourceName()
 local page,ready,active,busy=nil,false,false,false
+-- Whether this menu holds the input lease. Kept from the surface's own events, not
+-- polled: the WebUI page's focus was moved by other surfaces (a NativeUI HUD or chat
+-- taking the keyboard) and the menu closed on its own while ALT was still held.
+local focused=false
+local lostForeground=0 -- consecutive polls with the game window in the background
+local VERSION="1.2.0"
 local epoch,selection,lastPickAt,nextCheck=0,nil,-1,0
 local visibleActions={}
 local armed=true -- A captured key is reported as released by the key-mapping host.
@@ -23,7 +29,7 @@ exports("setEnabled",function(token,value) local r=owner();return registry.setEn
 exports("list",function() local r=owner();return registry.list(r) end)
 exports("isOpen",function() return active end)
 exports("isReady",function() return ready and page~=nil end)
-exports("getVersion",function() return "1.1.0" end)
+exports("getVersion",function() return VERSION end)
 exports("getContext",function() return selection end)
 exports("getTarget",function() return selection and selection.target end)
 
@@ -78,6 +84,7 @@ local function close(reason)
     epoch=epoch+1
     local wasOpen=active
     active,busy,selection,visibleActions=false,false,nil,{}
+    focused,lostForeground=false,0
     if page then page:setFocus(false,false);send("context:close");page:hide() end
     if Open77.players and Open77.players.resetControls then Open77.players.resetControls() end
     if wasOpen then TriggerEvent("open77:contextmenu:closed",reason or "closed") end
@@ -133,16 +140,16 @@ local function sameTarget(a,b)
     return (p.x-q.x)^2+(p.y-q.y)^2+(p.z-q.z)^2<0.04
 end
 local function validRequest(request)
-    return active and request==epoch and page and page:hasFocus() and Open77.input.isDown(key())
+    return active and request==epoch and page and focused and Open77.input.isDown(key())
 end
 local function pick(payload)
     if not active or busy or now()-lastPickAt<150 or type(payload)~="table" or payload.epoch~=epoch then return end
     lastPickAt=now()
-    -- Preserve the click's coordinates, not the cursor's later position after IPC.
-    -- They are observations only: the target is resolved by a fresh native trace.
-    local cursor=Open77.input.cursor()
-    if not cursor or not cursor.inBounds then return end
+    -- The click's coordinates, from the document (the lease's own pointer, not the
+    -- system cursor). They are observations only: the target is resolved by a fresh
+    -- native trace.
     local x,y=payload.x,payload.y
+    local cursor
     if type(x)~="number" or type(y)~="number" or x~=x or y~=y or x<0 or x>1 or y<0 or y>1 then return end
     cursor={x=x,y=y}
     epoch=epoch+1;local request=epoch
@@ -183,7 +190,7 @@ local function selectAction(payload)
     if not allowed or registry.get(action.token)~=action or not sameTarget(current,fresh) or not registry.matches(action,fresh) then
         busy=false;send("context:error",{epoch=request,message="This action is no longer available."});return
     end
-    -- Resolve the callback from the registered owner, never from WebUI payload.
+    -- Resolve the callback from the registered owner, never from the UI payload.
     fresh.action={id=action.id,owner=action.owner,token=action.token,data=action.data}
     local promise,reason=Open77.exports.call(action.owner,action.onSelect,fresh)
     if not promise then busy=false;send("context:error",{epoch=request,message=tostring(reason)});return end
@@ -200,13 +207,14 @@ local function open()
     local cursor=Open77.input.cursor()
     if not cursor or cursor.captured then return end
     epoch=epoch+1;active=true;selection=nil;visibleActions={}
+    send("context:open",{epoch=epoch,key=key(),appearance=config.appearance})
     page:show()
     if not page:setFocus(true,true) then close("focus_refused");return end
+    focused,lostForeground=true,0
     if not Open77.players.allowAim(false) or not Open77.players.allowShoot(false) or
        not Open77.players.allowInteraction(false) or not Open77.players.freezeRotation(true) then
         close("controls_unavailable");return
     end
-    send("context:open",{epoch=epoch,key=key(),appearance=config.appearance})
     TriggerEvent("open77:contextmenu:opened")
 end
 AddEventHandler("open77:pauseKey",function() if active then close("pause") end end)
@@ -223,9 +231,10 @@ AddEventHandler("onClientResourceStart",function(name)
         print("[contextmenu] Requires a client with the screen-picking APIs; package disabled.");return
     end
     local reason
-    page,reason=WebUI.create({entry="web/index.html",width=1920,height=1080,fps=60,
-        layer="hud",zIndex=750,transparent=true,visible=true})
-    if not page then print("[contextmenu] "..tostring(reason));return end
+    -- A NativeUI document (client/ui.lua, ui/contextmenu.rml) drawn by the game's
+    -- renderer, speaking the page API the WebUI page used.
+    page,reason=ContextMenuUi.create(config)
+    if not page then print("[contextmenu] Requires a client with NativeUI: "..tostring(reason));return end
     if config.blockNativeWeaponWheel then
         local blocked,err=false,"native_action_unavailable"
         if Open77.input.setNativeActionBlocked then blocked,err=Open77.input.setNativeActionBlocked("WeaponWheel",true) end
@@ -238,12 +247,20 @@ AddEventHandler("onClientResourceStart",function(name)
     page:on("context:pick",pick)
     page:on("context:select",selectAction)
     page:on("context:cancel",function(payload) if active and payload and payload.epoch==epoch then close("cancelled") end end)
+    -- The lease went to someone else (a WebUI page opened, the document reloaded) or
+    -- could not be taken: nothing else closes the menu behind the player's back.
+    page:on("context:blur",function(reason)
+        if active then focused=false;close("focus_lost:"..tostring(reason or "blur")) end
+    end)
     RegisterKeyMapping("contextmenu.activate","Context menu (hold)",config.key,open)
     CreateThread(function()
         while page do
             if not Open77.input.isDown(key()) then armed=true end
             if active then
-                if not page:hasFocus() or not Open77.input.cursor() or not Open77.input.isDown(key()) or not alive() then close("input_released")
+                -- A background window for one poll is a tooltip or an overlay blinking:
+                -- only a lasting one (about 75 ms) closes the menu.
+                lostForeground=Open77.input.cursor() and 0 or lostForeground+1
+                if not Open77.input.isDown(key()) or not alive() or lostForeground>=3 then close("input_released")
                 elseif selection and not busy and now()>=nextCheck then
                     nextCheck=now()+config.revalidateMs
                     local current=contextAt(selection.screen.x,selection.screen.y)

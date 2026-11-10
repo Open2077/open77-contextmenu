@@ -102,7 +102,7 @@ without physics collision (apart from the explicit F7 option) are not promised a
 nearest-neighbour fallback, no through-wall selection and no authority granted
 by a successful client raycast.
 
-## Cursor and WebUI focus
+## Cursor and WebUI/NativeUI focus
 
 ```lua
 local cursor, reason = Open77.input.cursor()
@@ -127,6 +127,9 @@ it before opening a new modal so cursor-only interfaces are not interrupted.
 WebUI has a virtual pointer: for an exact click on its fullscreen page, pass
 `event.clientX / innerWidth` and `event.clientY / innerHeight` from that click,
 instead of sampling the OS cursor after the message arrives.
+A NativeUI document's input lease has its own pointer too (it starts at the centre
+of the screen): use the click event's `mouse_x` / `mouse_y` divided by
+`ui:state().width` / `height`, as `open77_contextmenu` 1.2.0 does.
 
 `page:hasFocus()` reads current keyboard/cursor ownership and presentation state.
 It does not steal focus, and is false when another surface owns input. Releasing

@@ -1,0 +1,53 @@
+<rml>
+<head>
+    <title>Open//77 Target actions</title>
+    <link type="text/rcss" href="nui://open77/open77.rcss"/>
+    <link type="text/rcss" href="contextmenu.rcss"/>
+</head>
+<!-- The ALT context menu on NativeUI. client/ui.lua owns every decision and every
+     position; the document only binds the "cm" model and holds the shapes.
+     Layers, back to front: the click catcher (#hit), the vignette, the reticle that
+     follows the pointer and locks on a pick, the action panel, the hint bar. -->
+<body data-model="cm">
+<div id="stage" data-class-open="open" data-class-locked="locked" data-class-loading="loading"
+     data-class-available="available" data-class-keyboard="keyboard">
+
+    <div id="hit"></div>
+    <div id="vignette"></div>
+
+    <!-- four brackets, a ring that spins while the target is looked up, and a dot -->
+    <div id="reticle">
+        <div class="br tl"></div><div class="br tr"></div>
+        <div class="br bl"></div><div class="br brr"></div>
+        <div id="ring"><shape type="circle" class="ring-shape"/></div>
+        <div id="dot"></div>
+    </div>
+
+    <div id="panel" data-class-left="left" data-class-up="up" data-class-shown="panelShown"
+         data-class-empty="empty" data-class-error="hasError" data-class-busy="busy">
+        <div id="head">
+            <div id="kind"><span>{{kindLabel}}</span></div>
+            <div id="title"><span>{{title}}</span></div>
+            <div id="dist" data-class-on="distance != ''"><span>{{distance}}</span></div>
+        </div>
+        <div id="sweep"><div id="sweep-bar"></div></div>
+        <div id="status" data-class-on="status != ''">
+            <div id="status-tag"><span>{{statusTag}}</span></div>
+            <span id="status-text">{{status}}</span>
+        </div>
+        <div id="rows"></div>
+        <div id="desc" data-class-on="desc != ''"><span>{{desc}}</span></div>
+        <div id="foot">
+            <span class="fk">UP/DN</span><span class="ft">MOVE</span>
+            <span class="fk">ENTER</span><span class="ft">SELECT</span>
+            <span class="fk">ESC</span><span class="ft">CLOSE</span>
+        </div>
+    </div>
+
+    <div id="hintbar">
+        <div id="hint-key"><span>{{key}}</span></div>
+        <span class="hint-text">{{hint}}</span>
+    </div>
+</div>
+</body>
+</rml>

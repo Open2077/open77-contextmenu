@@ -1,4 +1,4 @@
--- Executes the actual controller with deterministic input/WebUI/export adapters.
+-- Executes the actual controller with deterministic input/NativeUI-surface/export adapters.
 local root=assert(arg[1])
 local time,threads,handlers,methods,messages=0,{},{},{},{}
 local pressed,focused,foreground,living,captured=true,false,true,true,false
@@ -44,7 +44,7 @@ function page:hasFocus() return focused end
 function page:show() return true end
 function page:hide() return true end
 function page:on(name,fn) pageEvents[name]=fn end
-WebUI={create=function() return page end}
+ContextMenuUi={create=function() return page end}
 local function control() controls=controls+1;return true end
 Open77={
     time={monotonic=function() return time/1000 end},
@@ -106,7 +106,7 @@ pressed=false;advance(150);pressed=true
 foreground=true;cursorCaptured=true;activate();assert(not methods.isOpen());cursorCaptured=false
 open();pick();assert(traceX==.25,"picking must use click-time coordinates")
 assert(messages["context:open"].appearance.accentColor==ContextMenuConfig.appearance.accentColor,
-    "configuration must reach the browser on every open")
+    "configuration must reach the document on every open")
 assert(#messages["context:menu"].actions==1)
 local epoch=messages["context:menu"].epoch
 choose("not-a-token",epoch);assert(executed==0)
@@ -130,12 +130,21 @@ open();pick();pressed=false;advance(50);predicateMode="ready";advance(800)
 assert(not methods.isOpen() and controls==0)
 for _,reason in ipairs({"focus","foreground","death","release"}) do
     open()
-    if reason=="focus" then focused=false elseif reason=="foreground" then foreground=false elseif reason=="death" then living=false else pressed=false end
-    advance(50);assert(not methods.isOpen() and controls==0,reason)
+    if reason=="focus" then focused=false;pageEvents["context:blur"]("taken")
+    elseif reason=="foreground" then foreground=false elseif reason=="death" then living=false else pressed=false end
+    advance(200);assert(not methods.isOpen() and controls==0,reason)
+end
+-- A background window for a single poll (an overlay blinking) does not close it.
+open();foreground=false;advance(25);foreground=true;advance(100);assert(methods.isOpen(),"one background poll must not close")
+pressed=false;advance(50);assert(not methods.isOpen())
+-- Only a real loss of the lease closes the menu: no polling of the surface's focus.
+open();focused=false;advance(200);assert(methods.isOpen(),"the menu must not close on a polled focus flag")
+pageEvents["context:blur"]("taken");assert(not methods.isOpen() and controls==0)
+for _ in ipairs({}) do
 end
 open();handlers["open77:pauseKey"]();assert(not methods.isOpen() and controls==0)
 activate();assert(not methods.isOpen(),"Escape cancellation must require a fresh press")
-assert(methods.isReady() and methods.getVersion()=="1.1.0")
+assert(methods.isReady() and methods.getVersion()=="1.2.0")
 assert(methods.clear())
 local scopedToken=assert(methods.registerVehicles({id="specific",label="Vehicle",onSelect="inspect"}))
 assert(methods.get(scopedToken).definition.types[1]=="vehicle")

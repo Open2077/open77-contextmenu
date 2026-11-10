@@ -1,7 +1,7 @@
 # Generic context menu — open77_contextmenu
 
 A standalone, resource-extensible ALT/click menu for any Open77 gamemode.
-No Freeroam dependency and no built-in admin powers. Version **1.1.0** is a
+No Freeroam dependency and no built-in admin powers. Version **1.2.0** is a
 framework for other client resources: **it intentionally supplies no gameplay
 actions on its own**. Install a consumer to populate it. This standalone repository ships no consumer or demonstration actions.
 
@@ -62,14 +62,17 @@ independent. This covers the native action, including its gamepad binding.
 If your server deliberately uses both interfaces on different keys, set
 `blockNativeWeaponWheel = false` in `shared/config.lua` and rebind the context menu.
 
-The WebUI uses a compact target-style layout: a small eye and translucent
-icon/label rows beside the clicked point. No target title, distance, branding,
-footer or persistent help banner. The hovered row has a clearly tinted background,
-accent border and icon; the first row is not pre-selected on open. Keyboard
-selection is separate from pointer hover. Descriptions remain in title/accessibility
-metadata (native tooltip presentation depends on the WebUI host). Keyboard navigation, loading/error states, viewport-edge
-clamping and reduced-motion support remain available. While idle, its
-surface is hidden and no raycast runs. While a target menu is open, its original
+The menu is a NativeUI document (`ui/contextmenu.rml`, driven by
+`client/ui.lua`) drawn by the game's renderer. While ALT is held a reticle follows
+the pointer; a click locks it on the pick (a spring), a ring and a sweep show the
+target being resolved, and a glass panel opens beside it with the target's kind
+(PLAYER, YOU, VEHICLE, NPC, OBJECT, DOOR, SURFACE, SKY), its distance and the
+icon/label rows, which slide in staggered. Mouse hover and keyboard focus (arrows,
+Home/End, Enter) share one highlighted row, whose description shows under the
+list; the first row is not pre-selected. A chosen action shows a spinner, a
+refused one shakes the panel with a message, and the menu fades in and out. The
+panel flips left near the right edge and never leaves the screen. While idle the
+document is hidden and no raycast runs. While a target menu is open, its original
 ray is rechecked at a bounded rate; a moving target leaving that ray closes it.
 
 ## Install
@@ -88,9 +91,16 @@ enable the example's manifest when trying it on a private server. Starting only
 its server runtime with `ensure` does not automatically start a client script
 whose manifest still has `auto_start false`.
 
-Requires Open77 `2.31.13+op77.63` (protocol 1.26) or a compatible newer build with the [screen-picking APIs](screen-picking.md), not the previous `.62` release. The package refuses to activate on older clients instead
-of interfering with other interfaces. Keep the complete `client`, `shared` and
-`web` directories and manifest together. Reconnect clients after updating it.
+Requires Open77 `2.50.0+op77.219` / `2.50.0-unstable+op77.217` (protocol 1.52) or newer: a client with NativeUI (`Open77.ui`) and the [screen-picking APIs](screen-picking.md). The package refuses to activate on older clients instead
+of interfering with other interfaces (use the 1.1.0 WebUI version there). Keep the
+complete `client`, `shared` and `ui` directories and manifest together. Reconnect
+clients after updating it.
+
+The menu closes when ALT is released, on Escape or right-click, on death, when the
+game window stays in the background for three polls, or when another interface
+really takes the input lease (a NativeUI `focus`/`error` event). It does not poll a
+focus flag: the 1.1.0 WebUI page lost its focus whenever a NativeUI HUD or the chat
+moved the input, and the menu closed on its own while ALT was still held.
 
 The package declares `world.query`, `input.actions`, `players.controls` and
 `local.events`. A consuming resource needs only the permissions used by its own
@@ -115,10 +125,11 @@ actions are available, the selected/hovered row accent, icons and progress spinn
 Invalid colors fall back to cyan; arbitrary CSS/URLs are not accepted.
 Destructive actions keep their red warning color.
 
-`scale` is clamped to 0.75–1.5; the default uses 27 px action rows and a 208 px
-menu in the 1920x1080 WebUI canvas. Actual screen size follows the game's WebUI
-scaling. Set `showGroups = true` to restore small category headings; they are
-hidden by default. Descriptions no longer create extra lines.
+`scale` is clamped to 0.75–1.5; the default uses 32 dp action rows in a 272 dp
+panel (1 dp = 1 px of the 1080p reference, so it is the same size at every
+resolution). Accent and scale are applied as named stylesheet layers. Set
+`showGroups = true` to show small category headings; they are hidden by default.
+A description appears under the list for the focused row only.
 
 Publish/reload the resource and reconnect clients after changing configuration.
 The theme is applied on every menu open. No native client rebuild is needed.
@@ -219,7 +230,7 @@ self hotspot in first person and is not a combat hitbox or pixel-perfect mesh te
 
 `onSelect` is called after the menu releases its input, so your callback can
 open another interface. A false/error result is logged. The package never accepts
-an event name, command, target ID or export name supplied by the browser. Only
+an event name, command, target ID or export name supplied by the UI. Only
 normalized click coordinates, the current menu epoch and an opaque action token
 cross this boundary; entity identity is resolved again by the native raycast.
 
@@ -250,8 +261,8 @@ check shown above. Do not use FiveM's `exports.resource:method()` syntax.
 | `setEnabled(token, boolean)` | Enables/disables one owned action. |
 | `list()` | Your actions' token, ID, label and enabled state. |
 | `isOpen()` | Whether targeting/menu input is active. |
-| `isReady()` | Whether the WebUI has completed its ready handshake. |
-| `getVersion()` | Framework API version string, currently `1.1.0`. |
+| `isReady()` | Whether the NativeUI document has loaded. |
+| `getVersion()` | Framework API version string, currently `1.2.0`. |
 | `getContext()` | Current selection snapshot or nil; no new raycast/predicate execution. No `action` field. |
 | `getTarget()` | Current target descriptor or nil. |
 | `setTargetingEnabled(boolean)` | Resource-owned disable claim. `false` closes an active menu and blocks reopening; `true` releases only your claim. |
@@ -275,7 +286,7 @@ Stopped/reloaded providers lose their registrations. Generation mismatches are
 checked before display and execution. A provider should register on each start;
 if the context-menu package is restarted independently, register again when its
 `onClientResourceStart` event arrives. Resource manifests use reconnect reload
-policy for safe WebUI lifecycle.
+policy for a clean UI lifecycle.
 
 Local informational events: `open77:contextmenu:opened()` and
 `open77:contextmenu:closed(reason)` and `open77:contextmenu:selected(context)`.
@@ -358,7 +369,7 @@ menu("clear")
 
 For gameplay effects, your `onSelect` sends a specific request to your own server
 resource, normally only a canonical target ID and the requested operation.
-Never send a caller-chosen player ID as the actor, never let the browser choose
+Never send a caller-chosen player ID as the actor, never let the UI choose
 an arbitrary server command, and never trust the client's range check.
 
 The server handler must use its authenticated `source`, resolve the current
