@@ -53,7 +53,7 @@ Open77={
         setNativeActionBlocked=function(action,blocked) assert(action=="WeaponWheel");wheelBlocked=blocked;return true end,
         isCaptured=function() return captured end,cursor=function() if foreground then return {x=.9,y=.8,inBounds=true,captured=cursorCaptured} end end},
     character={state=function() return {attached=true,alive=living,health=living and 100 or 0,position={x=0,y=0,z=0}} end},
-    players={allowAim=control,allowShoot=control,allowInteraction=control,freezeRotation=control,resetControls=function() controls=0 end},
+    players={allowAim=control,allowShoot=control,allowInteraction=control,freezeRotation=function() error("the menu must not freeze rotation: it locked the mouse look after Alt+Tab") end,resetControls=function() controls=0 end},
     camera={screenRaycast=function(x,y,distance,options)
         assert(options.self==true)
         traceX=x
@@ -88,7 +88,7 @@ end
 local function open()
     pressed=false;advance(150)
     pressed,foreground,living,captured=true,true,true,false
-    advance(200);activate();assert(methods.isOpen() and focused and controls==4)
+    advance(200);activate();assert(methods.isOpen() and focused and controls==3)
 end
 local function pick()
     local epoch=messages["context:open"].epoch
@@ -144,7 +144,7 @@ for _ in ipairs({}) do
 end
 open();handlers["open77:pauseKey"]();assert(not methods.isOpen() and controls==0)
 activate();assert(not methods.isOpen(),"Escape cancellation must require a fresh press")
-assert(methods.isReady() and methods.getVersion()=="1.2.0")
+assert(methods.isReady() and methods.getVersion()=="1.2.1")
 assert(methods.clear())
 local scopedToken=assert(methods.registerVehicles({id="specific",label="Vehicle",onSelect="inspect"}))
 assert(methods.get(scopedToken).definition.types[1]=="vehicle")

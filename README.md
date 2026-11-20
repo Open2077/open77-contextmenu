@@ -1,7 +1,7 @@
 # open77_contextmenu
 
 A compact, standalone ALT + click targeting framework for Open77.
-Version **1.2.0** — **no default actions**, no Freeroam dependency and no built-in
+Version **1.2.1** — **no default actions**, no Freeroam dependency and no built-in
 admin powers. Other resources register their own actions through client exports.
 Since 1.2.0 the menu is drawn with **NativeUI**, by the game's own renderer.
 
@@ -141,7 +141,7 @@ validation.
 
 Standalone snapshot of
 [open77-base `a9ca7cdd`](https://github.com/Open2077/open77-base/commit/a9ca7cdd),
-`resources/system/open77_contextmenu` 1.2.0 (PR #178).
+`resources/system/open77_contextmenu` 1.2.1.
 Runtime files are unchanged; documentation paths are adapted for this repository.
 
 [PolyForm Noncommercial 1.0.0](LICENSE), inherited from the source repository.

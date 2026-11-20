@@ -6,7 +6,7 @@ local page,ready,active,busy=nil,false,false,false
 -- taking the keyboard) and the menu closed on its own while ALT was still held.
 local focused=false
 local lostForeground=0 -- consecutive polls with the game window in the background
-local VERSION="1.2.0"
+local VERSION="1.2.1"
 local epoch,selection,lastPickAt,nextCheck=0,nil,-1,0
 local visibleActions={}
 local armed=true -- A captured key is reported as released by the key-mapping host.
@@ -211,8 +211,13 @@ local function open()
     page:show()
     if not page:setFocus(true,true) then close("focus_refused");return end
     focused,lostForeground=true,0
+    -- No freezeRotation: the focused document's native input lease already keeps
+    -- every mouse event from the game, so the camera cannot turn under the menu.
+    -- Holding GameplayRestriction.NoCameraControl through an Alt+Tab (ALT is the
+    -- menu key, so Alt+Tab always opens it) left the mouse look dead for good on
+    -- return, in first and third person, even after the restriction was lifted.
     if not Open77.players.allowAim(false) or not Open77.players.allowShoot(false) or
-       not Open77.players.allowInteraction(false) or not Open77.players.freezeRotation(true) then
+       not Open77.players.allowInteraction(false) then
         close("controls_unavailable");return
     end
     TriggerEvent("open77:contextmenu:opened")

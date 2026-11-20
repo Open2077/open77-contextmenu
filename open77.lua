@@ -1,5 +1,5 @@
 resource "open77_contextmenu"
-version "1.2.0"
+version "1.2.1"
 open77_version ">=0.0.1"
 auto_start true
 reload_policy "reconnect"
